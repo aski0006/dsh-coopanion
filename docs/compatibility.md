@@ -1,6 +1,6 @@
 # DSH 兼容性自动检查
 
-`.github/workflows/dsh-compatibility.yml` 每小时第 37 分钟读取官方 GitHub Release（含候选版）、npm latest/next 和官方 macOS ARM64 Desktop feed。手动执行可提供精确版本或 dsh-v tag，已支持版本也可演练。默认只检查高于当前精确支持列表最高版本的目标，每轮最多三个版本。定时运行在工作流合入 main 后生效，平台调度可能延迟。
+`.github/workflows/dsh-compatibility.yml` 每小时第 37 分钟读取官方 GitHub Release（含候选版）、npm latest/next 和官方 macOS ARM64 Desktop feed。手动执行可提供精确版本或 dsh-v tag，当前最高已支持版本也可演练。默认只检查高于当前精确支持列表最高版本的目标，每轮最多三个版本。定时运行在工作流合入 main 后生效，平台调度可能延迟。
 
 ## 检查与状态
 

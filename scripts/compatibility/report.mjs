@@ -115,6 +115,7 @@ async function createProposal(target, proposal, repo, token, sourceCommit, issue
   
   const { validateProposal } = await import('./proposal.mjs');
   const files = validateProposal(proposal, baseline, target.version, sourceCommit);
+  if (JSON.stringify(JSON.parse(files['package.json'])) === JSON.stringify(baseline)) return { detail: 'The exact target is already the declared baseline; no dependency proposal is needed.' };
   const branch = `codex/dsh-compat-${target.version}`;
   const pulls = await pages(`/repos/${repo}/pulls?state=all&head=takboo:${branch}`, token);
   if (pulls.length) return { url: pulls[0].html_url, detail: 'Existing proposal preserved; automatic runs do not overwrite maintainer edits.' };
