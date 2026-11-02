@@ -67,6 +67,10 @@ jobs:
       - name: Verify N0 notification contract and prepare the private probe
         run: npm run test:n0
       - run: npm run build
+      - name: Verify Windows native TOPMOST and recovery without stealing focus
+        if: runner.os == 'Windows'
+        timeout-minutes: 2
+        run: node tests/windows-topmost-native.mjs
       - run: npx playwright-core install --with-deps chromium
       - uses: ./.github/actions/setup-linux-display
         if: runner.os == 'Linux'
@@ -115,6 +119,7 @@ jobs:
           path: |
             artifacts/*.png
             artifacts/desktop-recovery.json
+            artifacts/windows-topmost-native.json
             artifacts/browser-startup-*.json
             artifacts/text-scale-*.json
             artifacts/multi-display-*.json
