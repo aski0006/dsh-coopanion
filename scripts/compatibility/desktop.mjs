@@ -55,15 +55,16 @@ try {
   validateSignature(await run('signature-identity', '/usr/bin/codesign', ['-dv', '--verbose=4', application]));
   const sdk = join(application, 'Contents/Resources/app.asar/dsh');
   const electronEnv = { ...env, ELECTRON_RUN_AS_NODE: '1', COOPANION_ASAR_SDK: sdk, COOPANION_ASAR_RESOLUTION_LOG: join(scratch, 'asar-resolutions.ndjson'), npm_execpath: npmCli(),
-    NARB_NATIVE_CACHE_DIR: join(scratch, 'native-cache'), NODE_OPTIONS: '--import=' + join(workspace, 'scripts/compatibility/desktop-bootstrap.mjs') };
-  report.runtime = JSON.parse(await run('runtime-inspect', executable, ['--expose-internals', 'scripts/compatibility/inspect-desktop.mjs', sdk], { env: electronEnv }));
+    NARB_NATIVE_CACHE_DIR: join(scratch, 'native-cache') };
+  report.runtime = JSON.parse(await run('runtime-inspect', executable, ['--expose-internals', 'scripts/compatibility/inspect-desktop.mjs', sdk], { env: electronEnv, captureStdout: true }));
   validateDesktopRuntime(report.runtime, report.version);
   const runtime = join(scratch, 'npm-runtime');
   await run('web-runtime', process.execPath, [npmCli(), 'install', '--prefix', runtime, '--no-audit', '--no-fund', `@deepseek-ai/dsh@${report.version}`], { setup: true });
+  const asarArgs = ['--expose-internals', '--import=' + join(workspace, 'scripts/compatibility/desktop-bootstrap.mjs')];
   // Bare SDK imports and explicit published Host module URLs are redirected to the inspected ASAR.
-  await run('asar-contract', executable, ['--expose-internals', 'tests/notification-host-contract.mjs', '--runtime', runtime, '--version', report.version], { env: electronEnv });
-  await run('asar-goal', executable, ['--expose-internals', 'tests/goal-host-contract.mjs', '--runtime', runtime, '--version', report.version, '--package', archive], { env: electronEnv });
-  await run('asar-session', executable, ['--expose-internals', 'tests/session-host-contract.mjs', '--verify-plugin', '--runtime', runtime, '--version', report.version, '--package', archive], { env: electronEnv });
+  await run('asar-contract', executable, [...asarArgs, 'tests/notification-host-contract.mjs', '--runtime', runtime, '--version', report.version], { env: electronEnv });
+  await run('asar-goal', executable, [...asarArgs, 'tests/goal-host-contract.mjs', '--runtime', runtime, '--version', report.version, '--package', archive], { env: electronEnv });
+  await run('asar-session', executable, [...asarArgs, 'tests/session-host-contract.mjs', '--verify-plugin', '--runtime', runtime, '--version', report.version, '--package', archive], { env: electronEnv });
   report.asarSources = [...new Map((await readFile(electronEnv.COOPANION_ASAR_RESOLUTION_LOG, 'utf8')).trim().split('\n').map(line => { const row = JSON.parse(line); return [row.name, row]; })).values()];
   for (const required of ['dsh-session', 'dsh-goal', 'dsh-api-session-controller']) assert(report.asarSources.some(row => row.name === required), 'Required actual ASAR Host source was not exercised');
   // Full GUI uses published Web Host/client in the official carrier; actual ASAR contracts were checked separately.

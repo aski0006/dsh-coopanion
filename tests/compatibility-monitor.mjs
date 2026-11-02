@@ -134,3 +134,10 @@ test('three platforms using different candidate archive bytes cannot pass', () =
   const reports = ['linux/x64','darwin/arm64','win32/x64'].map((value,i) => { const [platform,arch] = value.split('/'); return { platform,arch,status:'partial',archiveSha256:String(i) }; });
   assert.equal(completedComponents(target, reports, {}, { run:'123', sourceCommit }).sdk.status, 'failed');
 });
+
+test('structured stdout remains parseable and stderr remains in the evidence log', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'coopanion-stdout-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  const result = await command({ stages: [] }, directory, 'structured', process.execPath, ['-e', 'console.error("carrier diagnostic");console.log(JSON.stringify({runtime:"verified"}))'], { captureStdout: true });
+  assert.deepEqual(JSON.parse(result), { runtime: 'verified' });
+  assert.match(await readFile(join(directory, 'structured.log'), 'utf8'), /carrier diagnostic/);
+});

@@ -30,9 +30,9 @@ export async function isolatedEnv(scratch) {
   return env;
 }
 export class StageError extends Error { constructor(name, status) { super(`${name}: ${status}`); this.status = status; } }
-export async function command(report, output, name, file, args, { cwd = root, env = process.env, setup = false, timeout = 15 * 60000 } = {}) {
+export async function command(report, output, name, file, args, { cwd = root, env = process.env, setup = false, captureStdout = false, timeout = 15 * 60000 } = {}) {
   await mkdir(output, { recursive: true });
-  let log = '', timedOut = false, error;
+  let log = '', stdout = '', timedOut = false, error;
   const result = await new Promise(done => {
     const child = spawn(file, args, { cwd, env, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
     const kill = signal => {
@@ -43,7 +43,7 @@ export async function command(report, output, name, file, args, { cwd = root, en
     };
     let force;
     const timer = setTimeout(() => { timedOut = true; kill('SIGTERM'); force = setTimeout(() => kill('SIGKILL'), 10000); }, timeout);
-    for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { if (log.length < 12 * 1024 * 1024) log += data; });
+    for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { if (log.length < 12 * 1024 * 1024) log += data; if (captureStdout && stream === child.stdout && stdout.length < 12 * 1024 * 1024) stdout += data; });
     child.once('error', e => { error = e; });
     child.once('close', (code, signal) => { clearTimeout(timer); clearTimeout(force); done({ code, signal }); });
   });
@@ -54,6 +54,6 @@ export async function command(report, output, name, file, args, { cwd = root, en
   await writeFile(join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(`${name}: ${status}`);
   if (status !== 'passed') { console.error(log.slice(-6000)); throw new StageError(name, status); }
-  return log;
+  return captureStdout ? stdout : log;
 }
 export const npmCli = () => { if (!process.env.npm_execpath) throw new Error('Run through npm run compat:<command>'); return process.env.npm_execpath; };
