@@ -639,5 +639,5 @@ try {
   if (browser) await browser.close();
   if (settingsBrowser) await settingsBrowser.close();
   await stop(display);
-  await rm(root, { recursive: true, force: true });
+  await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
