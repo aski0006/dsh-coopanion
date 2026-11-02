@@ -14,6 +14,7 @@ const { CharacterStore } = require('../dist/character-store.cjs');
 const { createPetServer } = require('../dist/figure-server.cjs');
 const { trayState, trayLocale } = require('./tray-state.cjs');
 const { createDisplayController } = require('./display-controller.cjs');
+const { installAlwaysOnTop } = require('./always-on-top.cjs');
 const { petCopy, petLanguage } = require('../web/locale.js');
 app.setName(petCopy('en').defaultName);
 if (process.env.DSH_PET_TEST_DATA_DIR) {
@@ -34,7 +35,7 @@ if (process.env.DSH_PET_TEST_DEBUG_PORT) {
 const displayTest = process.env.DSH_PET_TEST_NO_SANDBOX === '1' && !!process.env.DSH_PET_TEST_DEBUG_PORT;
 const keyboardActivity = require('./keyboard-activity.cjs').createKeyboardActivity();
 const { initialLockState } = require('./lifecycle-state.cjs');
-let win, tray, options, lastFrame, poll, assetServer, characters, companions, displays, diagnostics, diagnosticRead;
+let win, tray, options, lastFrame, poll, assetServer, characters, companions, displays, diagnostics, diagnosticRead, disposeAlwaysOnTop;
 let lifecycle = { locks: 0, unlocks: 0, suspends: 0, resumes: 0 };
 const configureDiagnostics = () => {
   if (options?.diagnostics !== true) {
@@ -216,7 +217,7 @@ app.whenReady().then(async () => {
     return characters.import(new Uint8Array(value));
   });
   win = new BrowserWindow({ ...screen.getPrimaryDisplay().workArea, transparent: true, frame: false, resizable: false, skipTaskbar: true, hasShadow: false, show: false, alwaysOnTop: true, backgroundColor: '#00000000', webPreferences: { additionalArguments: displayTest ? ['--dsh-pet-display-test'] : [], preload: join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false } });
-  win.setAlwaysOnTop(true, 'floating');
+  disposeAlwaysOnTop = installAlwaysOnTop(win, { isSuspended: () => suspended });
   win.on('show', visibility); win.on('hide', visibility);
   win.webContents.on('render-process-gone', () => app.exit(1));
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -280,5 +281,5 @@ app.whenReady().then(async () => {
   if (process.connected) process.send(failure, () => app.exit(1)); else app.exit(1);
 });
 
-app.on('before-quit', () => { if (userClosed) process.send?.({ type: 'closed' }); clearInterval(poll); keyboardActivity.configure(false); if (diagnosticRead) { clearTimeout(diagnosticRead.timer); diagnosticRead.resolve(null); diagnosticRead = undefined; } diagnostics?.release(); void diagnostics?.close(); assetServer?.close(); tray?.destroy(); });
+app.on('before-quit', () => { if (userClosed) process.send?.({ type: 'closed' }); disposeAlwaysOnTop?.(); clearInterval(poll); keyboardActivity.configure(false); if (diagnosticRead) { clearTimeout(diagnosticRead.timer); diagnosticRead.resolve(null); diagnosticRead = undefined; } diagnostics?.release(); void diagnostics?.close(); assetServer?.close(); tray?.destroy(); });
 app.on('window-all-closed', () => { userClosed = true; app.quit(); });

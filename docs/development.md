@@ -50,8 +50,11 @@ macOS CI 固定使用 `macos-15` Apple Silicon 标准 runner。浏览器回归�
 | 拖放与小窝 | `tests/npc-drag-ui.mjs`：真实指针轨迹、两侧边缘、区域外停留、旧路线取消、按住及释放后小窝锚点 |
 | 自主循环与互动存档 | `tests/npc-life.test.js`、`tests/npc-life-native.mjs`、`tests/companionship-ui.mjs`、`tests/companionship-native.mjs` |
 | 原生冷启动 | `tests/lifecycle-startup-native.mjs`：受控 unknown／locked 与实际系统状态分别检查 |
+| Windows 置顶 | `tests/always-on-top.test.js`、`tests/windows-topmost-native.mjs`：平台策略、寿命清理与真实 Win32 TOPMOST 丢失／恢复 |
 
 原生 NPC 用例控制时钟、粗粒度输入和鼠标感知；身体移动及 arrived／interrupted 保持真实。受控循环通过与物理输入、自然体验分别报告。
+
+Windows 置顶回归由 CI 的隔离 Windows runner 串行运行 `node tests/windows-topmost-native.mjs`。它启动真实 Electron 窗口，用 Win32 读取 `WS_EX_TOPMOST`，主动清除标志后核对恢复和前台焦点保持，并检查隐藏／显示、最小化／还原与正常退出。失败也保留 `artifacts/windows-topmost-native.json`，绑定实际提交、构建与 Electron 版本。系统置顶丢失为受控注入；它不代替 Windows 11 物理设备、独占全屏游戏或长期桌面体验验收。本地缺少 Windows VM 时可使用此 CI 检查，本地 macOS 原生测试仍使用主项目虚拟机。
 
 Windows 的 125% 缩放与任务栏回归可在已登录、解锁的隔离控制台运行 `node tests/windows-geometry-native.mjs`。先通过系统显示设置选择 125%；脚本核对 Electron 读取的真实 DPI，不强制 Chromium 比例。它通过 Windows Shell API 切换任务栏自动隐藏、核对实际工作区及 viewport，再注入过期边界检查重同步与角色保持，结束时恢复原任务栏状态。NPC 时钟和感知为受控输入；这项 VM 检查不代替物理多屏或用户体验验收。RDP 会话不允许更改显示缩放时，先在虚拟机控制台设置并验证实际比例。
 

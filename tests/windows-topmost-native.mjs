@@ -58,6 +58,7 @@ try {
   await until(async () => (await petState()).visible, 'pet must become visible');
   handle = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getNativeWindowHandle().readBigUInt64LE().toString());
   report.electron = await app.evaluate(() => process.versions.electron);
+  report.systemIdleState = await app.evaluate(({ powerMonitor }) => powerMonitor.getSystemIdleState(1));
   assert.equal((await native('initial')).topmost, true, 'visible pet must carry WS_EX_TOPMOST');
   assert.equal((await petState()).topmost, true);
 
