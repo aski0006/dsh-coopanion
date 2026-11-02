@@ -144,7 +144,7 @@ test('structured stdout remains parseable and stderr remains in the evidence log
 
 test('Desktop resolution preserves package subpath exports, relative chunks and explicit Host file URLs', async t => {
   const { spawnSync } = await import('node:child_process');
-  const { pathToFileURL, fileURLToPath } = await import('node:url');
+  const { pathToFileURL } = await import('node:url');
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'coopanion-asar-resolve-'))); t.after(() => rm(directory, { recursive: true, force: true }));
   const sdk = join(directory, 'DeepSeek Harness.app/Contents/Resources/app.asar/dsh');
   const client = join(directory, 'client');
@@ -158,7 +158,7 @@ test('Desktop resolution preserves package subpath exports, relative chunks and 
   const explicit = pathToFileURL(join(client, 'node_modules/@deepseek-ai/dsh-compat-fixture/lib/index.js')).href;
   const probe = join(client, 'probe.mjs');
   await writeFile(probe, `import {carrier} from '@deepseek-ai/dsh-compat-fixture'; import {operation} from '@deepseek-ai/dsh-compat-fixture/operations'; import {carrier as explicit} from '${explicit}';console.log(JSON.stringify([carrier,operation,explicit]));`);
-  const bootstrap = fileURLToPath(new URL('../scripts/compatibility/desktop-bootstrap.mjs', import.meta.url));
+  const bootstrap = new URL('../scripts/compatibility/desktop-bootstrap.mjs', import.meta.url).href;
   const result = spawnSync(process.execPath, ['--import='+bootstrap, probe], { env: { ...process.env, COOPANION_ASAR_SDK: sdk }, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr); assert.deepEqual(JSON.parse(result.stdout), ['asar','asar-operation','asar']);
 });

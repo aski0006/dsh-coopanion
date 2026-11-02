@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { once } from 'node:events';
 import { existsSync, realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -18,6 +19,8 @@ import { unzipSync } from 'fflate';
 import { prepareNotifications, verifyInstalledNotifications } from './helpers/installed-notifications.mjs';
 import { crashNative, connectRecovered, waitRecovery } from './helpers/desktop-recovery.mjs';
 
+// Electron virtualizes .asar paths; cleanup must remove the physical archives.
+const removeTree = process.versions.electron ? createRequire(import.meta.url)('original-fs').promises.rm : rm;
 const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const version = process.env.DSH_TEST_VERSION ?? '0.2.0-rc.2';
 const project = fileURLToPath(new URL('../', import.meta.url));
@@ -639,5 +642,5 @@ try {
   if (browser) await browser.close();
   if (settingsBrowser) await settingsBrowser.close();
   await stop(display);
-  await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  await removeTree(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
