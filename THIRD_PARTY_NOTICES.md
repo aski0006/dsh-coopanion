@@ -67,3 +67,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Compatibility monitor
+
+The discovery, Issue-state, retry and proposal lifecycle in `scripts/compatibility/` adapts takboo/dsh-session-bin and takboo/dsh-usage-state. Copyright (c) 2026 takboo; the MIT notice is preserved in [scripts/compatibility/LICENSE](scripts/compatibility/LICENSE). Project-specific candidate packaging, companion installation and Desktop integration are maintained here.
