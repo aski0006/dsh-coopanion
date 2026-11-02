@@ -71,6 +71,9 @@ try {
   // Supply the unmodified signed executable to the native companion through a private alias.
   const override = join(scratch, 'carrier'), alias = join(override, 'Electron.app/Contents/MacOS/Electron');
   await mkdir(dirname(alias), { recursive: true }); await symlink(executable, alias);
+  // --ignore-scripts leaves Electron path.txt absent; both the package entry and
+  // electronExecutable then select the explicit override's 'electron' fallback.
+  await symlink(executable, join(override, 'electron'));
   Object.assign(electronEnv, { ELECTRON_OVERRIDE_DIST_PATH: override, DSH_TEST_RUNTIME: runtime, DSH_TEST_VERSION: report.version, DSH_TEST_PACKAGE_DIR: bundle });
   await run('official-electron-installation', executable, ['--expose-internals', 'tests/install.mjs'], { env: electronEnv, timeout: 30 * 60000 });
   report.status = 'partial'; report.reason = 'Signed official carrier and ASAR Host contracts plus installed companion integration passed; source review and physical acceptance remain separate.';

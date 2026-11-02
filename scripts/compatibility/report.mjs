@@ -159,16 +159,20 @@ async function main() {
       details: 'Only due components are running. Completed component evidence retains its original run/source identity. An interrupted component is eligible for bounded six-hour retries.' }));
     console.log(JSON.stringify({ issue: issue.html_url, status: 'running', attempts })); return;
   }
-  const reports = []; let proposal;
+  const reports = []; let proposal, candidate;
   const directory = process.argv[2];
+  try { candidate = JSON.parse(await readFile(join(directory, 'dsh-candidate-' + target.version, 'candidate.json'), 'utf8')); } catch {}
   for (const name of await readdir(directory).catch(() => [])) {
     const kind = name.startsWith('dsh-desktop-') ? 'desktop' : name.startsWith('dsh-check-') ? 'sdk' : null;
     if (!kind) continue;
     try {
       const r = validateReport(JSON.parse(await readFile(join(directory, name, 'report.json'), 'utf8')), target, sourceCommit, kind);
+      if (['passed', 'partial'].includes(r.status)) {
+        assert.equal(candidate?.sourceCommit, sourceCommit); assert.equal(candidate?.targetIdentity, target.identity);
+        assert.equal(r.archiveSha256, candidate?.archiveSha256, 'All component reports must consume the prepared archive');
+      }
       assert(!reports.some(old => Boolean(old.kind) === Boolean(r.kind) && old.platform === r.platform && old.arch === r.arch));
       reports.push(r);
-      if (!r.kind && r.platform === 'linux' && r.arch === 'x64') proposal = JSON.parse(await readFile(join(directory, name, 'proposal.json'), 'utf8'));
     } catch (error) { console.error(`Incomplete report ${name}: ${safe(error.message)}`); }
   }
   try { proposal = JSON.parse(await readFile(join(directory, 'dsh-candidate-' + target.version, 'proposal.json'), 'utf8')); } catch {}
