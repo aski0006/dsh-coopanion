@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, readFile, writeFile, readdir, realpath, cp, symlink } from 'node:fs/promises';
-import { dirname, join, resolve, relative, sep } from 'node:path';
+import { mkdir, mkdtemp, readFile, writeFile, readdir, realpath, cp } from 'node:fs/promises';
+import { join, resolve, relative, sep } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { root, commit, copySource, sourceDigest, isolatedEnv, command, npmCli, StageError } from './runner.mjs';
@@ -15,7 +15,7 @@ const scratch = await mkdtemp(join(parent, 'desktop-')), workspace = join(scratc
 const output = resolve(process.env.DSH_REPORT_DIR ?? join(scratch, 'report')), bundle = resolve(process.env.DSH_CANDIDATE_DIR ?? 'candidate');
 await mkdir(output, { recursive: true }); const before = await sourceDigest();
 const report = { schema: 1, kind: 'desktop', sourceCommit: commit(), platform: 'darwin', arch: 'arm64', status: 'running', stages: [], productionAdmissionChanged: false,
-  limits: ['Signed official Electron and ASAR Host contracts checked separately; installed-flow uses published Web Host/client fixtures; no native Desktop shell, physical input, notification-center or real account/model acceptance.'] };
+  limits: ['Signed official Host Electron and ASAR contracts checked separately; installed-flow uses published Web Host/client and the companion declared Electron dependency; no native Desktop shell, physical input, notification-center or real account/model acceptance.'] };
 const env = await isolatedEnv(scratch);
 const run = (name, file, args, opts = {}) => command(report, output, name, file, args, { cwd: workspace, env, ...opts });
 try {
@@ -69,13 +69,8 @@ try {
   for (const required of ['dsh-session', 'dsh-goal', 'dsh-api-session-controller']) assert(report.asarSources.some(row => row.name === required), 'Required actual ASAR Host source was not exercised');
   // Full GUI uses published Web Host/client in the official carrier; actual ASAR contracts were checked separately.
   delete electronEnv.NODE_OPTIONS; delete electronEnv.COOPANION_ASAR_SDK; delete electronEnv.COOPANION_ASAR_RESOLUTION_LOG;
-  // Supply the unmodified signed executable to the native companion through a private alias.
-  const override = join(scratch, 'carrier'), alias = join(override, 'Electron.app/Contents/MacOS/Electron');
-  await mkdir(dirname(alias), { recursive: true }); await symlink(executable, alias);
-  // --ignore-scripts leaves Electron path.txt absent; both the package entry and
-  // electronExecutable then select the explicit override's 'electron' fallback.
-  await symlink(executable, join(override, 'electron'));
-  Object.assign(electronEnv, { ELECTRON_OVERRIDE_DIST_PATH: override, DSH_TEST_RUNTIME: runtime, DSH_TEST_VERSION: report.version, DSH_TEST_PACKAGE_DIR: bundle });
+  // The Host uses the signed DSH carrier; the companion uses its declared Electron dependency, exactly as in product startup.
+  Object.assign(electronEnv, { DSH_TEST_RUNTIME: runtime, DSH_TEST_VERSION: report.version, DSH_TEST_PACKAGE_DIR: bundle });
   await run('official-electron-installation', executable, ['--expose-internals', 'tests/install.mjs'], { env: electronEnv, timeout: 30 * 60000 });
   report.status = 'partial'; report.reason = 'Signed official carrier and ASAR Host contracts plus installed companion integration passed; source review and physical acceptance remain separate.';
 } catch (error) { report.status = error instanceof StageError ? error.status : error instanceof FetchError ? 'retry' : 'failed'; report.reason = String(error.stack ?? error).slice(0, 6000); }

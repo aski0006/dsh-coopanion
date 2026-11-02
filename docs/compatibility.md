@@ -15,7 +15,7 @@
 
 基线和候选分别执行类型及单元检查，候选执行完整浏览器、通知与 test:inbox-ui。Linux 只构建一次候选 .tgz，三个安装 job 下载同一字节，验证摘要后分别在 Linux x64、Windows x64 与 macOS ARM64 运行真实 Loader、网页设置、通知／目标／会话契约、原生桌宠与恢复。未改声明的原包仍须通过官方准入判断拒绝未支持宿主。既有完整安装断言保留，候选没有跳过完成或接受回执检查。
 
-Desktop job 在独立目录下载匹配的官方 macOS ARM64 ZIP，检查摘要、路径及符号链接、完整代码签名和 DeepSeek Team ID。当前审阅载体为 Electron 44.7.0 / Node 24.21.0 / libuv 1.52.1 / ABI 149。验证真实 ASAR 的 Host 契约，目标完成与会话契约也单独运行于真实 ASAR；随后在官方 Electron 中运行同包安装与桌宠联动，此完整 GUI 流程的 Web Host／Client 由对应 npm 产物提供。该自动化不声称驱动原生 Desktop shell、通知中心、真实账号模型或物理多屏／输入设备。
+Desktop job 在独立目录下载匹配的官方 macOS ARM64 ZIP，检查摘要、路径及符号链接、完整代码签名和 DeepSeek Team ID。当前审阅载体为 Electron 44.7.0 / Node 24.21.0 / libuv 1.52.1 / ABI 149。验证真实 ASAR 的 Host 契约，目标完成与会话契约也单独运行于真实 ASAR；随后在官方 Electron 中运行同包安装与桌宠联动，此完整 GUI 流程的 Web Host／Client 由对应 npm 产物提供，桌宠按产品正常路径使用其声明的独立 Electron 依赖。该自动化不声称驱动原生 Desktop shell、通知中心、真实账号模型或物理多屏／输入设备。
 
 ## 报告与提案
 
