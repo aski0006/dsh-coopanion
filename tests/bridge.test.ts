@@ -156,3 +156,39 @@ process.on('message', m => {
     if (previous === undefined) delete process.env.WAYLAND_DISPLAY; else process.env.WAYLAND_DISPLAY = previous;
   }
 });
+
+// Platform-neutral fake child: the production failure modes are IPC-channel
+// state, not POSIX shebang handling, so Windows CI must exercise them too.
+it('reports native IPC acceptance per call instead of unconditional success', () => {
+  const bridge = new ElectronBridge();
+  const notice = { title: 'hi', body: '', sessionId: '', kind: 'message' as const };
+  const runtime = { phase: 'running' as const, generation: 3, visibilityRevision: 4, visible: true, suspended: false };
+  const sent: unknown[] = [];
+  Object.assign(bridge as unknown as Record<string, unknown>, {
+    child: { connected: true, send: (message: object) => { sent.push(message); return true; } },
+    nativeVisible: true, suspended: false, generation: 3, visibilityRevision: 4,
+  });
+  expect(bridge.notify(notice, runtime)).toBe(true);
+  expect(sent.at(-1)).toMatchObject({ type: 'notice', notice, generation: 3, visibilityRevision: 4 });
+  expect(bridge.notify(notice, { ...runtime, generation: 2 })).toBe(false);
+  expect(bridge.notify(notice, { ...runtime, visibilityRevision: 5 })).toBe(false);
+  expect(bridge.notify(notice, { ...runtime, visible: false })).toBe(false);
+  Object.assign(bridge as unknown as Record<string, unknown>, { nativeVisible: false });
+  expect(bridge.notify(notice, runtime)).toBe(false);
+  Object.assign(bridge as unknown as Record<string, unknown>, { nativeVisible: true, suspended: true });
+  expect(bridge.notify(notice, runtime)).toBe(false);
+  Object.assign(bridge as unknown as Record<string, unknown>, { suspended: false, child: { connected: false } });
+  expect(bridge.notify(notice, runtime)).toBe(false);
+  Object.assign(bridge as unknown as Record<string, unknown>, { child: { connected: true, send: () => false } });
+  expect(bridge.notify(notice, runtime)).toBe(false);
+});
+it('rejects a notice while closing or when the IPC channel throws', () => {
+  const bridge = new ElectronBridge();
+  const notice = { title: 'hi', body: '', sessionId: '', kind: 'message' as const };
+  Object.assign(bridge as unknown as Record<string, unknown>, {
+    child: { connected: true, send: () => true }, nativeVisible: true, suspended: false, generation: 3, visibilityRevision: 4, closing: true,
+  });
+  expect(bridge.notify(notice)).toBe(false);
+  Object.assign(bridge as unknown as Record<string, unknown>, { closing: false, child: { connected: true, send: () => { throw new Error('ipc gone'); } } });
+  expect(bridge.notify(notice)).toBe(false);
+});
