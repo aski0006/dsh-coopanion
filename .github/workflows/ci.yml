@@ -24,12 +24,18 @@ defaults:
     shell: bash
 jobs:
   workflow-syntax:
+    outputs:
+      hosts: ${{ steps.hosts.outputs.versions }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
+      - name: Read exact advertised Host matrix from the immutable source
+        id: hosts
+        run: node -e 'const fs=require("node:fs");const versions=require("./package.json").engines.dsh.split(" || ");if(!versions.length||versions.some(v=>!/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?$/.test(v)))throw Error("Expected exact Host versions");fs.appendFileSync(process.env.GITHUB_OUTPUT,"versions="+JSON.stringify(versions)+"\n")'
       - name: Validate workflow expressions and syntax
         run: |
           curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz -o "$RUNNER_TEMP/actionlint.tar.gz"
@@ -61,10 +67,22 @@ jobs:
       - name: Verify N0 notification contract and prepare the private probe
         run: npm run test:n0
       - run: npm run build
+      - name: Verify Windows native TOPMOST and recovery without stealing focus
+        if: runner.os == 'Windows'
+        timeout-minutes: 2
+        run: node tests/windows-topmost-native.mjs
       - run: npx playwright-core install --with-deps chromium
       - uses: ./.github/actions/setup-linux-display
         if: runner.os == 'Linux'
       - run: npm run character:pack -- examples/star paper-star.zip
+      - run: npm run test:ui
+      - run: npm run test:notification-ui
+      - run: npm run test:hint-ui
+      - run: npm run test:inbox-ui
+      - name: Verify native keyboard backend (synthetic X11 input only in managed display)
+        env:
+          DSH_KEYBOARD_TEST_X11_INPUT: ${{ runner.os == 'Linux' && '1' || '' }}
+        run: npm run test:keyboard-native
       - name: Verify native desktop with process logs
         timeout-minutes: 6
         env:
@@ -75,14 +93,6 @@ jobs:
           node -e "require('node:fs').copyFileSync('artifacts/lifecycle-startup-native.json', 'artifacts/lifecycle-startup-traced.json')"
           node -e "const {spawnSync}=require('node:child_process'); const result=spawnSync(process.execPath,['tests/lifecycle-startup-native.mjs'],{stdio:'inherit',env:{...process.env,DSH_LIFECYCLE_TRACE:'0'}}); if(result.error) throw result.error; process.exit(result.status ?? 1)"
           node -e "const {spawnSync}=require('node:child_process'); const result=spawnSync(process.execPath,['tests/lifecycle-startup-native.mjs'],{stdio:'inherit',env:{...process.env,DSH_LIFECYCLE_TRACE:'1',DSH_LIFECYCLE_LATE_DISPLAY:'1'}}); if(result.error) throw result.error; process.exit(result.status ?? 1)"
-      - run: npm run test:ui
-      - run: npm run test:notification-ui
-      - run: npm run test:hint-ui
-      - run: npm run test:inbox-ui
-      - name: Verify native keyboard backend (synthetic X11 input only in managed display)
-        env:
-          DSH_KEYBOARD_TEST_X11_INPUT: ${{ runner.os == 'Linux' && '1' || '' }}
-        run: npm run test:keyboard-native
       - name: Check distributable and create canonical Linux package
         if: runner.os == 'Linux'
         run: |
@@ -110,6 +120,7 @@ jobs:
           path: |
             artifacts/*.png
             artifacts/desktop-recovery.json
+            artifacts/windows-topmost-native.json
             artifacts/browser-startup-*.json
             artifacts/text-scale-*.json
             artifacts/multi-display-*.json
@@ -134,14 +145,14 @@ jobs:
           retention-days: 7
   install:
     name: Install (${{ matrix.os }}, DSH ${{ matrix.dsh }})
-    needs: test
+    needs: [test, workflow-syntax]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-15, windows-latest]
-        dsh: ['0.2.0-rc.2', '0.2.1-alpha.1', '0.2.1-rc.1', '0.2.1-rc.2', '0.2.1-rc.3']
+        dsh: ${{ fromJSON(needs.workflow-syntax.outputs.hosts) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

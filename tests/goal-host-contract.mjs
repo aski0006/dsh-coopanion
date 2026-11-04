@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
+// Signed Electron rejects NODE_OPTIONS; explicitly propagate only verifier flags.
+const nodeArgs = process.execArgv.filter(arg => arg === '--expose-internals' || arg.startsWith('--import='));
 const { values } = parseArgs({ options: { runtime: { type: 'string' }, version: { type: 'string' }, package: { type: 'string' } } });
 assert.ok(values.runtime && values.version && values.package, 'provide --runtime --version --package');
 const runtime = resolve(values.runtime), archive = resolve(values.package), modules = join(runtime, 'node_modules');
@@ -25,7 +27,7 @@ try {
   await mkdir(profile, { recursive: true });
   await writeFile(join(profile, 'package.json'), JSON.stringify({ private: true, dependencies: {}, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } } }));
   await writeFile(join(profile, 'pnpm-workspace.yaml'), 'packages:\n  - .\nnodeLinker: hoisted\nautoInstallPeers: false\n');
-  const installer = spawn(process.execPath, [cli, 'plugin', '--profile', 'm1', 'add', archive], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const installer = spawn(process.execPath, [...nodeArgs, cli, 'plugin', '--profile', 'm1', 'add', archive], { env, stdio: ['ignore', 'pipe', 'pipe'] });
   const installTimer = setTimeout(() => installer.kill('SIGKILL'), 240000);
   let installation = ''; installer.stdout.on('data', c => installation += c); installer.stderr.on('data', c => installation += c);
   try { assert.equal((await once(installer, 'exit'))[0], 0, installation); } finally { clearTimeout(installTimer); }
@@ -36,7 +38,7 @@ try {
   await writeFile(join(observer, 'package.json'), JSON.stringify({ name: 'coopanion-m1-observer', private: true, type: 'module' }));
   await writeFile(fixture, await readFile(resolve('tests/fixtures/goal-host.mjs')));
   await writeFile(join(profile, 'cordis.patch.yml'), `- insert:\n    - id: m1-contract\n      name: ${JSON.stringify(fixture)}\n- id: dsh-coopanion\n  config:\n    autoStart: false\n`);
-  host = spawn(process.execPath, [cli, '--profile', 'm1', '--no-open', '--port', '0'], { env, cwd: root, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+  host = spawn(process.execPath, [...nodeArgs, cli, '--profile', 'm1', '--no-open', '--port', '0'], { env, cwd: root, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
   host.stdout.on('data', c => logs = (logs + c).slice(-20000)); host.stderr.on('data', c => logs = (logs + c).slice(-20000));
   const result = await new Promise((res, rej) => {
     const timer = setTimeout(() => rej(new Error(`M1 host timed out: ${logs}`)), 60000);

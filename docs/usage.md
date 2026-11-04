@@ -4,13 +4,13 @@
 
 ## 安装到 Desktop
 
-支持 **DSH 0.2.0-rc.2、0.2.1-alpha.1、0.2.1-rc.1、0.2.1-rc.2 和 0.2.1-rc.3**；其他版本未声明兼容。
+支持 **DSH 0.2.0-rc.2、0.2.1-alpha.1、0.2.1-rc.1、0.2.1-rc.2、0.2.1-rc.3 和 0.2.1-rc.5**；其他版本未声明兼容。
 
-在 0.2.1-rc.1 / rc.2 / rc.3 中，从左下角账号菜单（未登录时显示“更多”）选择“设置”，再进入“桌宠”；0.2.0-rc.2／0.2.1-alpha.1 从侧栏“设置”进入。
+在 0.2.1-rc.1 / rc.2 / rc.3 / rc.5 中，从左下角账号菜单（未登录时显示“更多”）选择“设置”，再进入“桌宠”；0.2.0-rc.2／0.2.1-alpha.1 从侧栏“设置”进入。
 
 ### 在 Harness 中从 npm 安装
 
-打开侧边栏 **插件 → 添加插件**，在「包名或地址」输入 **`@takboo/dsh-coopanion@0.4.15`**，点击安装，再启用 `dsh-coopanion`。显式版本可以避免发布首日的裸包名解析回退，原因见下方。安装方式见 [Harness 官方插件管理说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/client/ui-plugin-manager/README.zh.md#安装一个组合包)。
+打开侧边栏 **插件 → 添加插件**，在「包名或地址」输入 **`@takboo/dsh-coopanion@0.4.17`**，点击安装，再启用 `dsh-coopanion`。显式版本可以避免发布首日的裸包名解析回退，原因见下方。安装方式见 [Harness 官方插件管理说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/client/ui-plugin-manager/README.zh.md#安装一个组合包)。
 
 ### 安装版本与发布时间保护
 
@@ -23,7 +23,7 @@ pnpm 11 的 `minimumReleaseAge` 默认为 1440 分钟（24 小时）。详情页
 **Desktop：** 使用 Desktop 自带的 `dsh` 命令。先启动 Desktop 一次初始化 profile，完全退出应用，再执行：
 
 ```bash
-dsh plugin --profile desktop add @takboo/dsh-coopanion@0.4.15
+dsh plugin --profile desktop add @takboo/dsh-coopanion@0.4.17
 ```
 
 npm 安装的 dsh 不能管理 Desktop 所拥有的 profile；若系统找不到 Desktop 的命令，先在 Desktop 的菜单栏中使用 **Manage dsh command／管理 dsh 命令** 安装命令入口。
@@ -31,7 +31,7 @@ npm 安装的 dsh 不能管理 Desktop 所拥有的 profile；若系统找不到
 **本机 Web profile：** 使用 npm 安装的 dsh 时，向实际使用的 profile 安装。例如默认 `web` profile：
 
 ```bash
-dsh plugin --profile web add @takboo/dsh-coopanion@0.4.15
+dsh plugin --profile web add @takboo/dsh-coopanion@0.4.17
 dsh --profile web
 ```
 
@@ -50,6 +50,8 @@ dsh plugin --profile desktop add /absolute/path/dsh-coopanion.tgz
 ### 安装完成后
 
 完全退出并重新打开 Harness。首次启动会下载并校验 Electron 44 运行时；在 **Settings → 桌宠** 查看运行状态，打开一段会话后双击角色即可聊天。
+
+Windows 桌宠显示期间会在失去置顶后自动恢复，恢复时不抢当前应用焦点；隐藏或最小化后不会因此重新显示。macOS／Linux 的窗口层级保持原有行为。
 
 ### Electron 运行时准备
 
@@ -94,7 +96,7 @@ node "$env:DSH_HOME\profiles\desktop\node_modules\electron\install.js"
 
 邀请可选择“一起活动／稍后／今天安静”，十秒不回应便自然结束。稍后至少等待一小时，今天安静跨重启保留，菜单可恢复邀请；它们不影响任务通知。进度无法保存时菜单会提示，原工作功能仍可使用。详情见[陪伴契约](companionship-contract.md)。
 
-桌宠意外退出后按 1、3、10 秒间隔最多自动恢复三次，连续稳定运行 60 秒后清零。设置页显示恢复次数和诊断，可随时关闭或在失败后手动重启；主动关闭不触发恢复。隐藏的角色恢复后仍隐藏，关注会话、完整结果、未读和有效待办保留，旧结果不再次主动提醒。窗口内草稿与阅读位置会随进程退出丢失，恢复不会重发聊天或任务。缺少图形环境、无效运行时路径或未确认清理的进程直接反馈错误，详见[恢复契约](desktop-recovery-contract.md)。
+桌宠意外退出后按 1、3、10 秒间隔最多自动恢复三次，连续稳定运行 60 秒后清零。设置页显示等待自动恢复状态、恢复次数和诊断，可随时关闭或在失败后手动重启；主动关闭不触发恢复。隐藏的角色恢复后仍隐藏，关注会话、完整结果、未读和有效待办保留，旧结果不再次主动提醒。窗口内草稿与阅读位置会随进程退出丢失，恢复不会重发聊天或任务。缺少图形环境、无效运行时路径或未确认清理的进程直接反馈错误，详见[恢复契约](desktop-recovery-contract.md)。
 
 ```yaml
 - id: dsh-coopanion
@@ -185,5 +187,7 @@ npm run character:pack -- examples/star paper-star.zip
 桌宠不作出审批，也不单独收集 API Key。聊天始终发给明确选中的关注会话，新建会话和后台任务不会自动切换目标。关注会话进行中时优先展示它的动作；空闲时用动作反映后台工作或确认 / 异常。状态栏图形优先提示任一会话的确认 / 异常，菜单显示详情。
 
 信封直接打开回复与待办收件箱：同一会话的多个未读回合合并展示最新回复，未读数量按会话计算。只有一份回复时展开全文；多份回复显示摘要和各自的 **继续对话 ↗**（在桌宠输入框继续来源会话），审批、提问及异常提供 **去处理 ↗**。全文支持 Markdown 标题、粗体、列表、表格和代码块。阅读不会切换正在聊天的会话；收件箱阅读器可连续读不同会话的结果，并返回收件箱查看新内容。正在阅读的回复不会被新结果替换。保留最近 200 份完整结果，优先淘汰已读；只有本次 Harness 运行中实时完成的回复计入未读，打开历史会话或重启 Harness 不会把旧回复重新标为未读。重启后原始对话仍由 Harness 保存；任务动画根据当前 Agent 的运行状态恢复。
+
+从回复选择“继续对话”或在会话列表切换目标后，输入和“打开源会话”保持最近一次明确选择，等待 Harness 确认；较早的已读或状态更新不会把目标退回旧会话。目标消失时采用 Harness 的实际可用列表。
 
 回复气泡展示或自动收起、查看收件箱摘要及收起收件箱均不会标记已读；主动展开阅读、关闭单份回复气泡或通过该回复回到源会话时，确认展示时合并的未读回合。阅读期间新到的回合继续保留未读，旧回合的完整结果仍可通过历史导航查看。通用异常／暂停项点击“去处理／Take a look”后，会清除该轮的信封条目与持续悲伤／等待神态；相同快照不会恢复，新异常仍会提醒。任务的原始失败／暂停事实保留，查看回执只在当前桌宠窗口运行期有效。审批与 AI 提问由 Harness 的实际答复、决定或取消结果结算；查看、收起互动提示或打开源会话均不会代替处理请求。

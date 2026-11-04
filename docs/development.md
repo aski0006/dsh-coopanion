@@ -29,7 +29,13 @@ npm run test:install
 
 浏览器检查真实 API 2 动画、聊天、完整阅读、角色导入及脚本隔离；桌面检查真实 Electron 窗口、IPC、托盘和恢复；安装检查使用官方 DSH loader 安装实际 `.tgz`。用 `DSH_TEST_VERSION=<支持版本>` 选择宿主，用 `DSH_TEST_PACKAGE_DIR=<规范包目录>` 消费已有规范包及校验文件。完整平台／宿主列表以 CI 矩阵为准。
 
-macOS CI 固定使用 `macos-15` Apple Silicon 标准 runner，原生图形检查先于完整浏览器回归执行，尽早识别图形环境不可用。三平台测试和十五组宿主安装保留全部断言与期限；本地 VM 验证仍单独记录实际系统、提交与包摘要。
+macOS CI 固定使用 `macos-15` Apple Silicon 标准 runner。浏览器回归结束后再执行原生桌面检查，保留既有执行顺序，系统桌面操作串行进行。三平台测试和十八组宿主安装保留全部断言与期限；本地 VM 验证仍单独记录实际系统、提交与包摘要。
+
+真实轻抚回归在角色宽度的 20%／80% 位置间往返，保持每次十八个可信移动，避免窄幅轨迹在输入调度迟缓时衰减为无效手势。伪造事件拒绝、二十次反馈、增长冷却、500 ms 响应和原有等待期限继续检查，产品判定规则不变。
+
+帧时间戳先于点击事件的回归使用角色已有的 `happy → nod → neutral` 短配方，专门检查时钟顺序、完成前不增长及完成后只增长一次。长舞蹈在低帧率下的物理播放可能合法超过该用例的十秒等待；长配方的完成、打断和增长仍由其他陪伴回归覆盖。产品二十秒活动期限及所有测试等待期限不变。
+
+完成、打断与存档回归保留默认 `happy → dance → neutral` 长配方。该用例使用调度虚拟时钟，并通过 API 2 补充有效 `tick` 输入推进真实角色物理；每次等待输入处理回执，再读取角色实际报告的 `moving`。额外物理输入最多 400 × 50ms，回执与进度检查仍保留原十秒等待。角色实现、真实布局／事件及存档服务共同参与验证；渲染帧率与交互延迟继续由真实时间用例检查。
 
 原生测试和安装使用隔离数据目录，系统桌面操作串行执行。CI 测试沙箱参数仅供隔离实例；普通安装保留 Chromium sandbox 与 contextIsolation，关闭 Node integration。测试通知适配器和模型答复器属于受控边界，不能代替通知中心实机送达或真实模型会话验收。
 
@@ -44,8 +50,11 @@ macOS CI 固定使用 `macos-15` Apple Silicon 标准 runner，原生图形检�
 | 拖放与小窝 | `tests/npc-drag-ui.mjs`：真实指针轨迹、两侧边缘、区域外停留、旧路线取消、按住及释放后小窝锚点 |
 | 自主循环与互动存档 | `tests/npc-life.test.js`、`tests/npc-life-native.mjs`、`tests/companionship-ui.mjs`、`tests/companionship-native.mjs` |
 | 原生冷启动 | `tests/lifecycle-startup-native.mjs`：受控 unknown／locked 与实际系统状态分别检查 |
+| Windows 置顶 | `tests/always-on-top.test.js`、`tests/windows-topmost-native.mjs`：平台策略、寿命清理与真实 Win32 TOPMOST 丢失／恢复 |
 
 原生 NPC 用例控制时钟、粗粒度输入和鼠标感知；身体移动及 arrived／interrupted 保持真实。受控循环通过与物理输入、自然体验分别报告。
+
+Windows 置顶回归由 CI 的隔离 Windows runner 串行运行 `node tests/windows-topmost-native.mjs`。它启动真实 Electron 窗口，用 Win32 读取 `WS_EX_TOPMOST`，主动清除标志后核对恢复和前台焦点保持，并检查隐藏／显示、最小化／还原与正常退出。失败也保留 `artifacts/windows-topmost-native.json`，绑定实际提交、构建与 Electron 版本。系统置顶丢失为受控注入；它不代替 Windows 11 物理设备、独占全屏游戏或长期桌面体验验收。本地缺少 Windows VM 时可使用此 CI 检查，本地 macOS 原生测试仍使用主项目虚拟机。
 
 Windows 的 125% 缩放与任务栏回归可在已登录、解锁的隔离控制台运行 `node tests/windows-geometry-native.mjs`。先通过系统显示设置选择 125%；脚本核对 Electron 读取的真实 DPI，不强制 Chromium 比例。它通过 Windows Shell API 切换任务栏自动隐藏、核对实际工作区及 viewport，再注入过期边界检查重同步与角色保持，结束时恢复原任务栏状态。NPC 时钟和感知为受控输入；这项 VM 检查不代替物理多屏或用户体验验收。RDP 会话不允许更改显示缩放时，先在虚拟机控制台设置并验证实际比例。
 

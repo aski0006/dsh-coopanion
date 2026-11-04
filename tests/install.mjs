@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { once } from 'node:events';
 import { existsSync, realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -18,11 +19,13 @@ import { unzipSync } from 'fflate';
 import { prepareNotifications, verifyInstalledNotifications } from './helpers/installed-notifications.mjs';
 import { crashNative, connectRecovered, waitRecovery } from './helpers/desktop-recovery.mjs';
 
+// Electron virtualizes .asar paths; cleanup must remove the physical archives.
+const removeTree = process.versions.electron ? createRequire(import.meta.url)('original-fs').promises.rm : rm;
 const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const version = process.env.DSH_TEST_VERSION ?? '0.2.0-rc.2';
-assert.ok(['0.2.0-rc.2', '0.2.1-alpha.1', '0.2.1-rc.1', '0.2.1-rc.2', '0.2.1-rc.3'].includes(version), 'test only advertised DSH versions');
 const project = fileURLToPath(new URL('../', import.meta.url));
 const manifest = JSON.parse(await readFile(join(project, 'package.json'), 'utf8'));
+assert.ok(manifest.engines.dsh.split(' || ').includes(version), 'test only advertised DSH versions');
 const archive = resolve(process.env.DSH_TEST_PACKAGE ?? (process.env.DSH_TEST_PACKAGE_DIR
   ? join(process.env.DSH_TEST_PACKAGE_DIR, `dsh-coopanion-${manifest.version}.tgz`)
   : join(project, npmTarballName(manifest))));
@@ -138,11 +141,11 @@ try {
     assert.equal(evaluatePluginCompatibility(manifest, {}, supported), undefined, `advertised host ${supported} is accepted`);
   }
   const previousHostRange = structuredClone(manifest);
-  previousHostRange.engines.dsh = previousHostRange.engines.dsh.replace(' || 0.2.1-rc.3', '');
+  previousHostRange.engines.dsh = manifest.engines.dsh.split(' || ').filter(v => v !== version).join(' || ');
   for (const peer of Object.keys(previousHostRange.peerDependencies)) {
-    if (peer.startsWith('@deepseek-ai/dsh-')) previousHostRange.peerDependencies[peer] = previousHostRange.peerDependencies[peer].replace(' || 0.2.1-rc.3', '');
+    if (peer.startsWith('@deepseek-ai/dsh-')) previousHostRange.peerDependencies[peer] = previousHostRange.peerDependencies[peer].split(' || ').filter(v => v !== version).join(' || ');
   }
-  assert.ok(evaluatePluginCompatibility(previousHostRange, {}, '0.2.1-rc.3'), 'the previous host declarations reject rc.3');
+  assert.ok(evaluatePluginCompatibility(previousHostRange, {}, version), 'declarations without the target reject that host');
   const previous = structuredClone(manifest);
   previous.version = '0.1.0';
   for (const peer of Object.keys(previous.peerDependencies)) {
@@ -150,7 +153,9 @@ try {
   }
   if (version === '0.2.0-rc.2') assert.equal(evaluatePluginCompatibility(previous, {}, version)?.exempted, false, 'reproduce the previous release rejection');
   assert.ok(evaluatePluginCompatibility(manifest, {}, '0.2.0-rc.1'), 'unverified versions remain incompatible');
-  assert.ok(evaluatePluginCompatibility(manifest, {}, '0.2.1-rc.4'), 'later prereleases require explicit verification');
+  for (const unknown of ['0.2.1-rc.4', '99.0.0-rc.1']) {
+    if (!manifest.engines.dsh.split(' || ').includes(unknown)) assert.ok(evaluatePluginCompatibility(manifest, {}, unknown), 'unverified versions remain rejected');
+  }
   if (version.startsWith('0.2.1-rc.')) {
     const restricted = structuredClone(manifest);
     restricted.engines.dsh = '0.2.0-rc.2';
@@ -637,5 +642,5 @@ try {
   if (browser) await browser.close();
   if (settingsBrowser) await settingsBrowser.close();
   await stop(display);
-  await rm(root, { recursive: true, force: true });
+  await removeTree(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }

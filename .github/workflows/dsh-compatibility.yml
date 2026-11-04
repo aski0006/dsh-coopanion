@@ -1,0 +1,218 @@
+name: Monitor DSH compatibility
+
+on:
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact npm version or dsh-v tag (empty discovers new versions)
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - '.github/workflows/dsh-compatibility.yml'
+      - 'scripts/compatibility/**'
+      - 'tests/compatibility-monitor.mjs'
+      - 'tests/install.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dsh-compatibility-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'monitor' }}
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      matrix: ${{ steps.find.outputs.matrix }}
+      count: ${{ steps.find.outputs.count }}
+      build_matrix: ${{ steps.find.outputs.build_matrix }}
+      build_count: ${{ steps.find.outputs.build_count }}
+      sdk_matrix: ${{ steps.find.outputs.sdk_matrix }}
+      sdk_count: ${{ steps.find.outputs.sdk_count }}
+      desktop_matrix: ${{ steps.find.outputs.desktop_matrix }}
+      desktop_count: ${{ steps.find.outputs.desktop_count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+      - name: Discover exact npm, Release and Desktop identities
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DSH_VERSION: ${{ inputs.version }}
+        run: npm run compat:discover
+
+  track:
+    needs: discover
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.discover.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        target: ${{ fromJSON(needs.discover.outputs.matrix).include }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+      - name: Persist a bounded attempt before starting expensive checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DSH_TARGET_JSON: ${{ toJSON(matrix.target) }}
+        run: npm run compat:report -- --start
+
+  prepare:
+    needs: [discover, track]
+    if: always() && needs.discover.result == 'success' && needs.discover.outputs.build_count != '0' && (github.event_name == 'pull_request' || needs.track.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        target: ${{ fromJSON(needs.discover.outputs.build_matrix).include }}
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/compatibility-browsers
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+      - run: npm ci --ignore-scripts
+      - run: npx playwright-core install --with-deps chromium
+      - name: Build one isolated candidate and run baseline and browser contracts
+        env:
+          DSH_TARGET_JSON: ${{ toJSON(matrix.target) }}
+          DSH_REPORT_DIR: ${{ runner.temp }}/dsh-candidate
+        run: npm run compat:prepare
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: dsh-candidate-${{ matrix.target.version }}
+          path: ${{ runner.temp }}/dsh-candidate/
+          retention-days: 14
+          if-no-files-found: error
+
+  check:
+    name: DSH ${{ matrix.target.version }} / ${{ matrix.runner }}
+    needs: [discover, prepare]
+    if: always() && needs.discover.result == 'success' && needs.discover.outputs.sdk_count != '0' && needs.prepare.result == 'success'
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        target: ${{ fromJSON(needs.discover.outputs.sdk_matrix).include }}
+        runner: [ubuntu-latest, windows-latest, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/compatibility-browsers
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+      - run: npm ci --ignore-scripts
+      - run: npx playwright-core install --with-deps chromium
+      - uses: ./.github/actions/setup-linux-display
+        if: runner.os == 'Linux'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dsh-candidate-${{ matrix.target.version }}
+          path: candidate
+          digest-mismatch: error
+      - name: Verify unchanged admission and install the shared candidate package
+        env:
+          DSH_TARGET_JSON: ${{ toJSON(matrix.target) }}
+          DSH_REPORT_DIR: ${{ runner.temp }}/dsh-report
+        run: npm run compat:check
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: dsh-check-${{ matrix.target.version }}-${{ matrix.runner }}
+          path: ${{ runner.temp }}/dsh-report/
+          retention-days: 14
+          if-no-files-found: warn
+
+  desktop:
+    name: Desktop DSH ${{ matrix.target.version }} / macos-15 ARM64
+    needs: [discover, prepare]
+    if: always() && needs.discover.result == 'success' && needs.discover.outputs.desktop_count != '0' && needs.prepare.result == 'success'
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        target: ${{ fromJSON(needs.discover.outputs.desktop_matrix).include }}
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/compatibility-browsers
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+      - run: npm ci --ignore-scripts
+      - run: npx playwright-core install --with-deps chromium
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dsh-candidate-${{ matrix.target.version }}
+          path: candidate
+          digest-mismatch: error
+      - name: Verify signed official Desktop and isolated companion integration
+        env:
+          DSH_TARGET_JSON: ${{ toJSON(matrix.target) }}
+          DSH_REPORT_DIR: ${{ runner.temp }}/dsh-desktop-report
+        run: npm run compat:desktop
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: dsh-desktop-${{ matrix.target.version }}-macos-15
+          path: ${{ runner.temp }}/dsh-desktop-report/
+          retention-days: 14
+          if-no-files-found: warn
+
+  report:
+    needs: [discover, track, prepare, check, desktop]
+    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.discover.result == 'success' && needs.discover.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        target: ${{ fromJSON(needs.discover.outputs.matrix).include }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          pattern: dsh-*-${{ matrix.target.version }}*
+          path: ${{ runner.temp }}/dsh-reports
+          digest-mismatch: error
+      - name: Maintain durable Issue and bounded draft dependency proposal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DSH_TARGET_JSON: ${{ toJSON(matrix.target) }}
+        run: npm run compat:report -- "$RUNNER_TEMP/dsh-reports"

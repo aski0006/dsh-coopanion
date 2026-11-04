@@ -51,10 +51,41 @@ async function fixture(t, mode = 'interactive', vocab, star = false, timing = nu
 }
 async function tickNext(page, extra = 0) { await advanceCompanion(page, await page.evaluate(() => window.companionState.active?.dueAt) + extra); }
 async function finishActivity(page) {
+  const body = page.frames().find(frame => frame.url().includes('figure-frame.html'));
+  assert.ok(body, 'live API 2 body frame exists');
+  // The real tick handler runs first; this observer only acknowledges processing.
+  await body.evaluate(() => addEventListener('message', event => {
+    if (event.source === parent && event.data?.t === 'tick' && Number.isSafeInteger(event.data.companionTestTick))
+      parent.postMessage({ t: 'companion-test-tick-ack', id: event.data.companionTestTick }, '*');
+  }));
+  await page.evaluate(() => { window.companionPhysicsTicks = 0; });
   for (let i = 0; i < 6 && await page.evaluate(() => !!window.companionState.active); i++) {
     const index = await page.evaluate(() => window.companionState.active.index);
     await tickNext(page);
-    await page.waitForFunction(index => !window.companionState.active || window.companionState.active.index !== index, index);
+    // Actual body inputs and the original progress predicate share this ten-second wait.
+    await page.waitForFunction(async index => {
+      if (!window.companionState.active || window.companionState.active.index !== index) return true;
+      const frame = document.querySelector('#body-layer iframe');
+      if (!frame?.contentWindow) throw new Error('Live body frame required');
+      const tick = () => new Promise((resolve, reject) => {
+        const id = ++window.companionPhysicsTicks;
+        let layout;
+        const receive = event => {
+          if (event.source !== frame.contentWindow) return;
+          if (event.data?.t === 'frame') layout = event.data.layout;
+          if (event.data?.t !== 'companion-test-tick-ack' || event.data.id !== id) return;
+          removeEventListener('message', receive);
+          if (typeof layout?.moving !== 'boolean') reject(new Error('Invalid body motion report'));
+          else resolve(layout);
+        };
+        addEventListener('message', receive);
+        frame.contentWindow.postMessage({ t: 'tick', dt: .05, companionTestTick: id }, '*');
+      });
+      let layout;
+      while (window.companionPhysicsTicks < 400) { layout = await tick(); if (!layout.moving) break; }
+      if (layout?.moving) throw new Error('Body motion exceeded twenty seconds of controlled physics');
+      return !window.companionState.active || window.companionState.active.index !== index;
+    }, index);
   }
 }
 async function menu(page) { await page.locator('#pet').dispatchEvent('contextmenu', { button: 2 }); await page.locator('#menu').waitFor(); }
@@ -113,6 +144,7 @@ test('manual play grows only after completion, aborted play does not, archive su
   await menu(page); await page.locator('#companion-play').click(); await page.mouse.move(0, 0); assert.equal((await read()).relation.total, 0);
   await finishActivity(page); await page.waitForFunction(() => document.querySelector('#companion-status').textContent.includes('1'));
   assert.equal((await read()).relation.total, 1);
+  assert.ok(await f.body.evaluate(() => window.bodyOrders.some(order => order.t === 'do' && order.word === 'dance')), 'the default long recipe reaches its real body');
   f.setDay(16); await menu(page); await page.locator('#companion-play').click(); await page.mouse.move(0, 0);
   await f.receive({ type: 'snapshot', snapshot: snapshot({ mood: 'working', active: true, sessions: [{ ...session, mood: 'working', active: true }] }) });
   await advanceCompanion(page, await page.evaluate(() => window.companionNow + 20000)); assert.equal((await read()).relation.total, 1);
@@ -148,7 +180,8 @@ test('real strokes count once, forged sandbox touches do not, missing words rema
   await body.evaluate(() => parent.postMessage({ t: 'frame', layout: null, events: [{ kind: 'touch', detail: { kind: 'pet' } }] }, '*'));
   await page.waitForTimeout(100); assert.equal((await read()).relation.total, 0);
   const b = await page.locator('#pet').boundingBox();
-  for (let i = 0; i < 18; i++) await page.mouse.move(b.x + b.width * (i % 2 ? .35 : .65), b.y + b.height * .45, { steps: 1 });
+  // Cross the real hit region broadly enough to remain a stroke under input jitter.
+  for (let i = 0; i < 18; i++) await page.mouse.move(b.x + b.width * (i % 2 ? .2 : .8), b.y + b.height * .45, { steps: 1 });
   await page.waitForFunction(() => document.querySelector('#companion-status').textContent.includes('1'));
   assert.equal((await read()).relation.total, 1);
   const missing = await fixture(t, 'quiet', ['neutral', 'stand']);
@@ -183,7 +216,7 @@ test('twenty real strokes keep visible feedback while hovering and share the gro
     await page.mouse.move(0, 0);
     if (trial) await page.waitForTimeout(2550);
     const b = await page.locator('#pet').boundingBox();
-    for (let i = 0; i < 18; i++) await page.mouse.move(b.x + b.width * (i % 2 ? .35 : .65), b.y + b.height * .45, { steps: 1 });
+    for (let i = 0; i < 18; i++) await page.mouse.move(b.x + b.width * (i % 2 ? .2 : .8), b.y + b.height * .45, { steps: 1 });
     await page.waitForFunction(n => window.strokeLatencies.length > n, trial);
     await page.waitForTimeout(300);
     assert.equal(await page.locator('#companion-feedback').isVisible(), true);
@@ -292,7 +325,8 @@ test('native NPC waits for acknowledged workArea before establishing home', asyn
 });
 
 test('manual interaction survives a frame timestamp preceding the click event clock', async t => {
-  const { page, read, configure } = await fixture(t, 'quiet', undefined, false, { frameLag: 100 });
+  // Isolate clock ordering from the longer dance physics at low frame rates.
+  const { page, read, configure } = await fixture(t, 'quiet', ['happy', 'nod', 'neutral'], false, { frameLag: 100 });
   await configure({ roam: false });
   await menu(page); await page.locator('#companion-play').click(); await page.mouse.move(0, 0);
   await page.waitForTimeout(200);
