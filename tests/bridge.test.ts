@@ -180,7 +180,16 @@ it('reports native IPC acceptance per call instead of unconditional success', ()
   Object.assign(bridge as unknown as Record<string, unknown>, { suspended: false, child: { connected: false } });
   expect(bridge.notify(notice, runtime)).toBe(false);
   Object.assign(bridge as unknown as Record<string, unknown>, { child: { connected: true, send: () => false } });
-  expect(bridge.notify(notice, runtime)).toBe(false);
+  expect(bridge.notify(notice, runtime)).toBe(true);
+});
+it('reports an asynchronous send failure without resending an accepted notice', () => {
+  const bridge = new ElectronBridge();
+  let complete!: (error: Error | null) => void, calls = 0;
+  const failures: Error[] = []; bridge.on('failure', error => failures.push(error));
+  Object.assign(bridge, { child: { connected: true, send: (_message: object, callback: typeof complete) => { complete = callback; calls++; return false; } } });
+  expect(bridge.notify({ title: 'queued', body: '', sessionId: '' })).toBe(true);
+  const failure = new Error('asynchronous IPC failure'); complete(failure);
+  expect(failures).toEqual([failure]); expect(calls).toBe(1);
 });
 it('rejects a notice while closing or when the IPC channel throws', () => {
   const bridge = new ElectronBridge();

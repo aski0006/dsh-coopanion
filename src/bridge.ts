@@ -158,7 +158,10 @@ export class ElectronBridge extends EventEmitter implements PetBridge {
     const child = this.child;
     if (!child?.connected || this.closing) return false;
     try {
-      return child.send(message, error => { if (error && this.child === child && !this.closing) this.emit('failure', error); }) !== false;
+      // A false Node return can mean backpressure after enqueueing. Reporting
+      // rejection here would let callers send the same accepted notice again.
+      child.send(message, error => { if (error && this.child === child && !this.closing) this.emit('failure', error); });
+      return true;
     } catch { return false; }
   }
 
